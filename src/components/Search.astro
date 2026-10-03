@@ -1,0 +1,71 @@
+---
+---
+<div class="w-full max-w-xl mx-auto mb-8">
+  <input
+    type="text"
+    id="custom-search-input"
+    placeholder="Search... (Try 'title:go', 'tag:webdev', or 'content:astro')"
+    class="w-full px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-gray-100 focus:outline-none focus:border-emerald-500"
+  />
+  <div id="search-results" class="mt-4 space-y-4"></div>
+</div>
+
+<script is:inline>
+  let pagefind;
+
+  async function initSearch() {
+    try {
+      pagefind = await import("/pagefind/pagefind.js");
+      await pagefind.init();
+    } catch (e) {
+      console.warn("Pagefind search index unavailable");
+      return;
+    }
+
+    const input = document.getElementById("custom-search-input");
+    const resultsContainer = document.getElementById("search-results");
+
+    input?.addEventListener("input", async (e) => {
+      const rawQuery = e.target.value.trim();
+      if (!rawQuery) {
+        resultsContainer.innerHTML = "";
+        return;
+      }
+
+      let query = rawQuery;
+      let filterOptions = {};
+
+      if (rawQuery.startsWith("title:")) {
+        query = rawQuery.replace("title:", "").trim();
+        await pagefind.options({
+          ranking: { metaWeights: { title: 20.0 } }
+        });
+      } else if (rawQuery.startsWith("tag:")) {
+        const tagValue = rawQuery.replace("tag:", "").trim();
+        query = "";
+        filterOptions = { tag: tagValue };
+      } else if (rawQuery.startsWith("content:")) {
+        query = rawQuery.replace("content:", "").trim();
+        await pagefind.options({
+          ranking: { metaWeights: { title: 0.0 } }
+        });
+      } else {
+        await pagefind.options({
+          ranking: { metaWeights: { title: 5.0 } }
+        });
+      }
+
+      const search = await pagefind.search(query || null, { filters: filterOptions });
+      const results = await Promise.all(search.results.map((r) => r.data()));
+
+      resultsContainer.innerHTML = results.map((item) => `
+        <a href="${item.url}" class="block p-4 bg-gray-900 border border-gray-800 rounded-lg hover:border-emerald-500 transition">
+          <h3 class="text-lg font-bold text-gray-100">${item.meta.title || "Untitled"}</h3>
+          <p class="text-sm text-gray-400 mt-1">${item.excerpt}</p>
+        </a>
+      `).join("");
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", initSearch);
+</script>
